@@ -101,7 +101,7 @@ class Calendar(QWidget):
         self.lcd.setMinimumWidth(80)
         timer = QTimer(self)
         timer.timeout.connect(self.showTime)
-        timer.start(500)
+        timer.start(1000)
         self.showTime()
 
         hbox1 = QHBoxLayout()
