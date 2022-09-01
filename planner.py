@@ -13,11 +13,11 @@ from os import path
 
 class Calendar(QWidget):
     # keep the current time as class variable for reference
-    currentDay = datetime.now().day
-    currentMonth = datetime.now().month
-    currentYear = datetime.now().year
+    currentDay = str(datetime.now().day).rjust(2, '0')
+    currentMonth = str(datetime.now().month).rjust(2, '0')
+    currentYear = str(datetime.now().year).rjust(2, '0')
 
-    def __init__(self):
+    def __init__(self, width, height):
         super().__init__()
         folder = path.dirname(__file__)
         self.icon_folder = path.join(folder, "icons")
@@ -25,16 +25,15 @@ class Calendar(QWidget):
         self.setWindowTitle("Planner")
         self.setWindowIcon(QtGui.QIcon(path.join(self.icon_folder, 'window.png')))
 
-        self.setGeometry(300, 200, 600, 400)
-        self.initUI()
+        self.setGeometry(width // 4, height // 4, width // 2, height // 2)
+        self.initUI(width // 2, height // 2)
 
-    def initUI(self):
+    def initUI(self, width, height):
         self.calendar = QCalendarWidget()
-        self.calendar.setGeometry(0, 0, 300, 300)
         self.calendar.setGridVisible(True)
 
         # don't allow going back to past months in calendar
-        self.calendar.setMinimumDate(QDate(self.currentYear, self.currentMonth, 1))
+        self.calendar.setMinimumDate(QDate(int(self.currentYear), int(self.currentMonth), 1))
 
         # format for dates in calendar that have events
         self.fmt = QTextCharFormat()
@@ -59,15 +58,15 @@ class Calendar(QWidget):
         # delete data from days prior to the current day
         cur = QDate.currentDate()
         for date in list(self.data.keys()):
-            check_date = QDate.fromString(date, "dMyyyy")
+            check_date = QDate.fromString(date, "ddMMyyyy")
             if cur.daysTo(check_date) <= 0 and cur != check_date:
                 self.data.pop(date)
             else:
                 self.calendar.setDateTextFormat(check_date, self.fmt)
 
         # mark current day in calendar
-        current = str(self.currentDay) + str(self.currentMonth) + str(self.currentYear)
-        self.calendar.setDateTextFormat(QDate.fromString(current, "dMyyyy"), cur_fmt)
+        current = self.currentDay + self.currentMonth + self.currentYear
+        self.calendar.setDateTextFormat(QDate.fromString(current, "ddMMyyyy"), cur_fmt)
 
         # organize buttons and layouts for display
         addButton = QPushButton("Add Event")
@@ -126,8 +125,8 @@ class Calendar(QWidget):
         vbox.addLayout(hbox3)
 
         hbox = QHBoxLayout()
-        hbox.addWidget(self.calendar)
-        hbox.addLayout(vbox)
+        hbox.addWidget(self.calendar, 55)
+        hbox.addLayout(vbox, 45)
 
         self.setLayout(hbox)
 
@@ -145,14 +144,14 @@ class Calendar(QWidget):
         # by start time
         date = self.getDate()
         row = self.note_group.currentRow()
-        title = "Add {}".format("event")
-        string, ok = QInputDialog.getText(self, title, title)
+        title = "Add event"
+        string, ok = QInputDialog.getText(self, " ", title)
 
         if ok and string:
             if string[0].isdigit() and string[0] not in ["0", "1", "2"]:
                 string = string.replace(string[0], "0" + string[0])
             self.note_group.insertItem(row, string)
-            self.calendar.setDateTextFormat(QDate.fromString(date, "dMyyyy"), self.fmt)
+            self.calendar.setDateTextFormat(QDate.fromString(date, "ddMMyyyy"), self.fmt)
             if date in self.data:
                 self.data[date].append(string)
             else:
@@ -166,7 +165,7 @@ class Calendar(QWidget):
 
         if not item:
             return
-        reply = QMessageBox.question(self, "Remove", "Remove",
+        reply = QMessageBox.question(self, " ", "Remove",
                                      QMessageBox.Yes | QMessageBox.No)
 
         if reply == QMessageBox.Yes:
@@ -174,7 +173,7 @@ class Calendar(QWidget):
             self.data[date].remove(item.text())
             if not self.data[date]:
                 del(self.data[date])
-                self.calendar.setDateTextFormat(QDate.fromString(date, "dMyyyy"), self.delfmt)
+                self.calendar.setDateTextFormat(QDate.fromString(date, "ddMMyyyy"), self.delfmt)
             del(item)
 
     def editNote(self):
@@ -186,7 +185,7 @@ class Calendar(QWidget):
         if item:
             copy = item.text()
             title = "Edit event"
-            string, ok = QInputDialog.getText(self, title, title,
+            string, ok = QInputDialog.getText(self, " ", title,
                                               QLineEdit.Normal, item.text())
 
             if ok and string:
@@ -199,7 +198,7 @@ class Calendar(QWidget):
     def getDate(self):
         # parse the selected date into usable string form
         select = self.calendar.selectedDate()
-        date = str(select.day()) + str(select.month()) + str(select.year())
+        date = str(select.day()).rjust(2, '0') + str(select.month()).rjust(2, '0') + str(select.year())
         return date
 
     def labelDate(self):
@@ -234,6 +233,8 @@ class Calendar(QWidget):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
-    window = Calendar()
+    screen = app.primaryScreen()
+    size = screen.size()
+    window = Calendar(size.width(), size.height())
     window.show()
     sys.exit(app.exec_())
