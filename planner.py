@@ -26,9 +26,9 @@ class Calendar(QWidget):
         self.setWindowIcon(QtGui.QIcon(path.join(self.icon_folder, 'window.png')))
 
         self.setGeometry(width // 4, height // 4, width // 2, height // 2)
-        self.initUI(width // 2, height // 2)
+        self.initUI()
 
-    def initUI(self, width, height):
+    def initUI(self):
         self.calendar = QCalendarWidget()
         self.calendar.setGridVisible(True)
 
