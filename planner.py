@@ -18,7 +18,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import QDate, Qt, QTimer, QTime
 from PyQt5 import QtGui
 from PyQt5.QtGui import QTextCharFormat, QColor, QPixmap
-from style import *
+from style import STYLESHEET
 from os import path
 
 
@@ -43,18 +43,13 @@ class Calendar(QWidget):
         self.calendar = QCalendarWidget()
         self.calendar.setGridVisible(True)
 
-        # don't allow going back to past months in calendar
-        self.calendar.setMinimumDate(
-            QDate(int(self.currentYear), int(self.currentMonth), 1)
-        )
-
         # format for dates in calendar that have events
         self.fmt = QTextCharFormat()
         self.fmt.setBackground(QColor(255, 165, 0, 100))
 
         # format for the current day
-        cur_fmt = QTextCharFormat()
-        cur_fmt.setBackground(QColor(0, 255, 90, 70))
+        cur_day_fmt = QTextCharFormat()
+        cur_day_fmt.setBackground(QColor(0, 255, 90, 70))
 
         # format to change back to if all events are deleted
         self.delfmt = QTextCharFormat()
@@ -67,29 +62,27 @@ class Calendar(QWidget):
             with open("data.json", "r") as json_file:
                 self.data = json.load(json_file)
 
-        # delete data from days prior to the current day
+        # format the dates in the calendar that have events
         cur_date = QDate.currentDate()
         for date in list(self.data.keys()):
-            check_date = QDate.fromString(date, "ddMMyyyy")
-            if cur_date.daysTo(check_date) <= 0 and cur_date != check_date:
-                self.data.pop(date)
-            else:
-                self.calendar.setDateTextFormat(check_date, self.fmt)
+            qdate = QDate.fromString(date, "ddMMyyyy")
+            self.calendar.setDateTextFormat(qdate, self.fmt)
 
         # mark current day in calendar
-        self.calendar.setDateTextFormat(cur_date, cur_fmt)
+        self.calendar.setDateTextFormat(cur_date, cur_day_fmt)
 
         # organize buttons and layouts for display
-        addButton = QPushButton("Add Event")
-        addButton.clicked.connect(self.addNote)
-        editButton = QPushButton("Edit")
-        editButton.clicked.connect(self.editNote)
-        delButton = QPushButton("Delete")
-        delButton.clicked.connect(self.delNote)
+        self.addButton = QPushButton("Add Event")
+        self.addButton.clicked.connect(self.addNote)
+        self.editButton = QPushButton("Edit")
+        self.editButton.clicked.connect(self.editNote)
+        self.delButton = QPushButton("Delete")
+        self.delButton.clicked.connect(self.delNote)
 
         self.calendar.selectionChanged.connect(self.showDateInfo)
         self.calendar.selectionChanged.connect(self.labelDate)
         self.calendar.selectionChanged.connect(self.highlightFirstItem)
+        self.calendar.selectionChanged.connect(self.toggleAddEditDeleteButtons)
 
         self.note_group = QListWidget()
         self.note_group.setSortingEnabled(True)
@@ -98,7 +91,7 @@ class Calendar(QWidget):
         todayButton = QPushButton("Today")
         todayButton.clicked.connect(self.selectToday)
         self.label = QLabel()
-        label_font = QtGui.QFont("Gabriola", 18)
+        label_font = QtGui.QFont("Arial", 16)
         self.label.setFont(label_font)
         self.labelDate()
         self.showDateInfo()
@@ -118,13 +111,13 @@ class Calendar(QWidget):
 
         hbox1 = QHBoxLayout()
         hbox1.addWidget(todayButton)
-        hbox1.addWidget(self.label)
         hbox1.addStretch(1)
+        hbox1.addWidget(self.label)
 
         hbox2 = QHBoxLayout()
-        hbox2.addWidget(addButton)
-        hbox2.addWidget(editButton)
-        hbox2.addWidget(delButton)
+        hbox2.addWidget(self.addButton)
+        hbox2.addWidget(self.editButton)
+        hbox2.addWidget(self.delButton)
 
         hbox3 = QHBoxLayout()
         hbox3.addStretch(1)
@@ -152,6 +145,11 @@ class Calendar(QWidget):
 
     def selectToday(self):
         self.calendar.setSelectedDate(QDate.currentDate())
+
+    def toggleAddEditDeleteButtons(self):
+        enabled = self.calendar.selectedDate() >= QDate.currentDate()
+        for button in [self.addButton, self.editButton, self.delButton]:
+            button.setEnabled(enabled)
 
     def addNote(self):
         # adding notes for selected date
