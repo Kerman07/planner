@@ -228,11 +228,11 @@ class Calendar(QWidget):
     def labelDate(self):
         # label to show the long name form of the selected date
         # format US style like "Thursday, February 20, 2020"
-        select = self.calendar.selectedDate()
-        weekday, month = select.dayOfWeek(), select.month()
-        day, year = str(select.day()), str(select.year())
-        week_day, word_month = QDate.longDayName(weekday), QDate.longMonthName(month)
-        self.label.setText(week_day + ", " + word_month + " " + day + ", " + year)
+        selected_date = self.calendar.selectedDate()
+        weekday = QDate.longDayName(selected_date.dayOfWeek())
+        month = QDate.longMonthName(selected_date.month())
+        
+        self.label.setText(f"{weekday}, {month} {selected_date.day()}, {selected_date.year()}")
 
     def highlightFirstItem(self):
         # highlight the first item immediately after switching selection
