@@ -1,6 +1,6 @@
 import sys
-from datetime import datetime
-import json
+from datetime import datetime, time, timedelta
+
 from PyQt5.QtWidgets import (
     QApplication,
     QWidget,
@@ -11,7 +11,9 @@ from PyQt5.QtWidgets import (
     QVBoxLayout,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
+    QDialog,
     QInputDialog,
     QLCDNumber,
 )
@@ -20,16 +22,19 @@ from PyQt5 import QtGui
 from PyQt5.QtGui import QTextCharFormat, QColor, QPixmap
 from style import STYLESHEET
 from os import path
+from time_input_dialog import TimeInputDialog
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from models.event import Event
 
 
 class Calendar(QWidget):
-    # keep the current time as class variable for reference
-    currentDay = str(datetime.now().day).rjust(2, "0")
-    currentMonth = str(datetime.now().month).rjust(2, "0")
-    currentYear = str(datetime.now().year).rjust(2, "0")
-
     def __init__(self, width, height):
         super().__init__()
+        engine = create_engine('sqlite:///events.db')
+        Session = sessionmaker(bind=engine)
+        self.session = Session()
+
         folder = path.dirname(__file__)
         self.icon_folder = path.join(folder, "icons")
 
@@ -55,20 +60,16 @@ class Calendar(QWidget):
         self.delfmt = QTextCharFormat()
         self.delfmt.setBackground(Qt.transparent)
 
-        # check if json file exists, if it does load the data from it
-        self.data = {}
-        file_exists = path.isfile(path.join(path.dirname(__file__), "data.json"))
-        if file_exists:
-            with open("data.json", "r") as json_file:
-                self.data = json.load(json_file)
+        # load events from the database
+        self.events = Event.eventsFromMidnight(self.session)
 
         # format the dates in the calendar that have events
-        cur_date = QDate.currentDate()
-        for date in list(self.data.keys()):
-            qdate = QDate.fromString(date, "ddMMyyyy")
+        for event in self.events:
+            qdate = QDate(event.event_date.year, event.event_date.month, event.event_date.day)
             self.calendar.setDateTextFormat(qdate, self.fmt)
 
         # mark current day in calendar
+        cur_date = QDate.currentDate()
         self.calendar.setDateTextFormat(cur_date, cur_day_fmt)
 
         # organize buttons and layouts for display
@@ -138,92 +139,97 @@ class Calendar(QWidget):
 
     def showDateInfo(self):
         # add events to selected date
-        date = self.getDate()
+        date = self.calendar.selectedDate()
+        specific_date = datetime(date.year(), date.month(), date.day())
         self.note_group.clear()
-        if date in self.data:
-            self.note_group.addItems(self.data[date])
+        for event in Event.eventsOnDate(self.session, specific_date):
+            item = QListWidgetItem(str(event))
+            item.setData(Qt.UserRole, event.id)
+            self.note_group.addItem(item)
 
     def selectToday(self):
         self.calendar.setSelectedDate(QDate.currentDate())
 
     def toggleAddEditDeleteButtons(self):
-        enabled = self.calendar.selectedDate() >= QDate.currentDate()
-        for button in [self.addButton, self.editButton, self.delButton]:
-            button.setEnabled(enabled)
+        is_future_date = self.calendar.selectedDate() >= QDate.currentDate()
+        has_events = self.note_group.count() > 0
+
+        self.addButton.setEnabled(is_future_date)
+        self.editButton.setEnabled(is_future_date and has_events)
+        self.delButton.setEnabled(is_future_date and has_events)
 
     def addNote(self):
         # adding notes for selected date
-        # if a note starts with any number other than 0, 1, 2
-        # add a 0 before it so that we can easily sort events
-        # by start time
-        date = self.getDate()
-        row = self.note_group.currentRow()
-        title = "Add event"
-        string, ok = QInputDialog.getText(self, " ", title)
+        date = self.calendar.selectedDate().toPyDate()
+        new_event_dialog = TimeInputDialog()
 
-        if ok and string:
-            if string[0].isdigit() and string[0] not in ["0", "1", "2"]:
-                string = string.replace(string[0], "0" + string[0])
-            self.note_group.insertItem(row, string)
-            self.calendar.setDateTextFormat(
-                QDate.fromString(date, "ddMMyyyy"), self.fmt
-            )
-            if date in self.data:
-                self.data[date].append(string)
-            else:
-                self.data[date] = [string]
+        if new_event_dialog.exec_() != QDialog.Accepted:
+            return
+
+        event_time_str = new_event_dialog.get_time()
+        event_description = new_event_dialog.get_text()
+
+        event_time = datetime.strptime(event_time_str, "%H:%M").time()
+        event_date = datetime.combine(date, event_time)
+
+        new_event = Event(event_date=event_date, description=event_description)
+
+        qdate = QDate(new_event.event_date.year, new_event.event_date.month, new_event.event_date.day)
+        self.calendar.setDateTextFormat(qdate, self.fmt)
+
+        self.session.add(new_event)
+        self.session.commit()
+        
+        self.showDateInfo()
+        self.highlightFirstItem()
+        self.toggleAddEditDeleteButtons()
 
     def delNote(self):
         # delete the currently selected item
-        date = self.getDate()
         row = self.note_group.currentRow()
         item = self.note_group.item(row)
 
-        if not item:
-            return
         reply = QMessageBox.question(
             self, " ", "Remove", QMessageBox.Yes | QMessageBox.No
         )
 
-        if reply == QMessageBox.Yes:
-            item = self.note_group.takeItem(row)
-            self.data[date].remove(item.text())
-            if not self.data[date]:
-                del self.data[date]
-                self.calendar.setDateTextFormat(
-                    QDate.fromString(date, "ddMMyyyy"), self.delfmt
-                )
-            del item
+        if reply != QMessageBox.Yes:
+            return
+        
+        event = self.session.query(Event).filter(Event.id == item.data(Qt.UserRole)).first()
+        self.session.delete(event)
+        self.session.commit()
 
-    def editNote(self):
-        # edit the currently selected item
-        date = self.getDate()
-        row = self.note_group.currentRow()
-        item = self.note_group.item(row)
-
-        if item:
-            copy = item.text()
-            title = "Edit event"
-            string, ok = QInputDialog.getText(
-                self, " ", title, QLineEdit.Normal, item.text()
+        self.note_group.takeItem(row)
+        if self.note_group.count() == 0:
+            self.calendar.setDateTextFormat(
+                QDate(event.event_date.year, event.event_date.month, event.event_date.day), 
+                self.delfmt
             )
 
-            if ok and string:
-                self.data[date].remove(copy)
-                self.data[date].append(string)
-                if string[0].isdigit() and string[0] not in ["0", "1", "2"]:
-                    string = string.replace(string[0], "0" + string[0])
-                item.setText(string)
+        self.showDateInfo()
+        self.highlightFirstItem()
+            
 
-    def getDate(self):
-        # parse the selected date into usable string form
-        select = self.calendar.selectedDate()
-        date = (
-            str(select.day()).rjust(2, "0")
-            + str(select.month()).rjust(2, "0")
-            + str(select.year())
-        )
-        return date
+    def editNote(self):
+        # update current note
+        item = self.note_group.currentItem()
+        event = self.session.query(Event).filter(Event.id == item.data(Qt.UserRole)).first()
+        
+        edit_event_dialog = TimeInputDialog(event)
+
+        if edit_event_dialog.exec_() != QDialog.Accepted:
+            return
+        
+        event_time_str = edit_event_dialog.get_time()
+        event_description = edit_event_dialog.get_text()
+
+        event_time = datetime.strptime(event_time_str, "%H:%M").time()
+        event.event_date = datetime.combine(event.event_date.date(), event_time)
+        event.description = event_description
+        
+        self.session.commit()
+        item.setText(str(event))
 
     def labelDate(self):
         # label to show the long name form of the selected date
@@ -248,9 +254,6 @@ class Calendar(QWidget):
         self.lcd.display(text)
 
     def closeEvent(self, e):
-        # save all data into json file when user closes app
-        with open("data.json", "w") as json_file:
-            json.dump(self.data, json_file)
         e.accept()
 
 
