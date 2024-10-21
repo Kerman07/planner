@@ -1,45 +1,52 @@
 import sys
-from datetime import datetime, time, timedelta
+from datetime import datetime
+from os import path
 
+from PyQt5 import QtGui
+from PyQt5.QtCore import (
+    QDate,
+    QTime,
+    QTimer,
+    Qt,
+)
+from PyQt5.QtGui import (
+    QColor,
+    QPixmap,
+    QTextCharFormat,
+)
 from PyQt5.QtWidgets import (
     QApplication,
-    QWidget,
     QCalendarWidget,
-    QLabel,
+    QDialog,
     QHBoxLayout,
-    QPushButton,
-    QVBoxLayout,
-    QLineEdit,
+    QLCDNumber,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QDialog,
-    QInputDialog,
-    QLCDNumber,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt5.QtCore import QDate, Qt, QTimer, QTime
-from PyQt5 import QtGui
-from PyQt5.QtGui import QTextCharFormat, QColor, QPixmap
-from style import STYLESHEET
-from os import path
-from time_input_dialog import TimeInputDialog
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
 from models.event import Event
+from style import STYLESHEET
+from time_input_dialog import TimeInputDialog
 
 
 class Calendar(QWidget):
-    def __init__(self, width, height):
+    def __init__(self, width, height, session):
         super().__init__()
-        engine = create_engine('sqlite:///events.db')
-        Session = sessionmaker(bind=engine)
-        self.session = Session()
+        self.session = session
 
         folder = path.dirname(__file__)
-        self.icon_folder = path.join(folder, "icons")
+        self.iconFolder = path.join(folder, "icons")
 
         self.setWindowTitle("Planner")
-        self.setWindowIcon(QtGui.QIcon(path.join(self.icon_folder, "window.png")))
+        self.setWindowIcon(QtGui.QIcon(path.join(self.iconFolder, "window.png")))
 
         self.setGeometry(width // 4, height // 4, width // 2, height // 2)
         self.initUI()
@@ -53,24 +60,25 @@ class Calendar(QWidget):
         self.fmt.setBackground(QColor(255, 165, 0, 100))
 
         # format for the current day
-        cur_day_fmt = QTextCharFormat()
-        cur_day_fmt.setBackground(QColor(0, 255, 90, 70))
+        curDayFmt = QTextCharFormat()
+        curDayFmt.setBackground(QColor(0, 255, 90, 70))
 
         # format to change back to if all events are deleted
-        self.delfmt = QTextCharFormat()
-        self.delfmt.setBackground(Qt.transparent)
+        self.delFmt = QTextCharFormat()
+        self.delFmt.setBackground(Qt.transparent)
 
         # load events from the database
         self.events = Event.eventsFromMidnight(self.session)
 
         # format the dates in the calendar that have events
         for event in self.events:
-            qdate = QDate(event.event_date.year, event.event_date.month, event.event_date.day)
+            qdate = QDate(
+                event.event_date.year, event.event_date.month, event.event_date.day
+            )
             self.calendar.setDateTextFormat(qdate, self.fmt)
 
         # mark current day in calendar
-        cur_date = QDate.currentDate()
-        self.calendar.setDateTextFormat(cur_date, cur_day_fmt)
+        self.calendar.setDateTextFormat(QDate.currentDate(), curDayFmt)
 
         # organize buttons and layouts for display
         self.addButton = QPushButton("Add Event")
@@ -85,20 +93,20 @@ class Calendar(QWidget):
         self.calendar.selectionChanged.connect(self.highlightFirstItem)
         self.calendar.selectionChanged.connect(self.toggleAddEditDeleteButtons)
 
-        self.note_group = QListWidget()
-        self.note_group.setSortingEnabled(True)
-        self.note_group.setStyleSheet("QListView::item {height: 40px;}")
+        self.noteGroup = QListWidget()
+        self.noteGroup.setSortingEnabled(True)
+        self.noteGroup.setStyleSheet("QListView::item {height: 40px;}")
 
         todayButton = QPushButton("Today")
         todayButton.clicked.connect(self.selectToday)
         self.label = QLabel()
-        label_font = QtGui.QFont("Arial", 16)
-        self.label.setFont(label_font)
+        labelFont = QtGui.QFont("Arial", 16)
+        self.label.setFont(labelFont)
         self.labelDate()
         self.showDateInfo()
 
         labelp = QLabel()
-        pixmap = QPixmap(path.join(self.icon_folder, "calendar.png"))
+        pixmap = QPixmap(path.join(self.iconFolder, "calendar.png"))
         labelp.setPixmap(pixmap)
 
         # set up a timer that automatically updates every second
@@ -127,7 +135,7 @@ class Calendar(QWidget):
 
         vbox = QVBoxLayout()
         vbox.addLayout(hbox1)
-        vbox.addWidget(self.note_group)
+        vbox.addWidget(self.noteGroup)
         vbox.addLayout(hbox2)
         vbox.addLayout(hbox3)
 
@@ -140,54 +148,58 @@ class Calendar(QWidget):
     def showDateInfo(self):
         # add events to selected date
         date = self.calendar.selectedDate()
-        specific_date = datetime(date.year(), date.month(), date.day())
-        self.note_group.clear()
-        for event in Event.eventsOnDate(self.session, specific_date):
+        specificDate = datetime(date.year(), date.month(), date.day())
+        self.noteGroup.clear()
+        for event in Event.eventsOnDate(self.session, specificDate):
             item = QListWidgetItem(str(event))
             item.setData(Qt.UserRole, event.id)
-            self.note_group.addItem(item)
+            self.noteGroup.addItem(item)
 
     def selectToday(self):
         self.calendar.setSelectedDate(QDate.currentDate())
 
     def toggleAddEditDeleteButtons(self):
-        is_future_date = self.calendar.selectedDate() >= QDate.currentDate()
-        has_events = self.note_group.count() > 0
+        isFutureDate = self.calendar.selectedDate() >= QDate.currentDate()
+        hasEvents = self.noteGroup.count() > 0
 
-        self.addButton.setEnabled(is_future_date)
-        self.editButton.setEnabled(is_future_date and has_events)
-        self.delButton.setEnabled(is_future_date and has_events)
+        self.addButton.setEnabled(isFutureDate)
+        self.editButton.setEnabled(isFutureDate and hasEvents)
+        self.delButton.setEnabled(isFutureDate and hasEvents)
 
     def addNote(self):
         # adding notes for selected date
         date = self.calendar.selectedDate().toPyDate()
-        new_event_dialog = TimeInputDialog()
+        newEventDialog = TimeInputDialog()
 
-        if new_event_dialog.exec_() != QDialog.Accepted:
+        if newEventDialog.exec_() != QDialog.Accepted:
             return
 
-        event_time_str = new_event_dialog.get_time()
-        event_description = new_event_dialog.get_text()
+        eventTimeStr = newEventDialog.getTime()
+        eventDescription = newEventDialog.getText()
 
-        event_time = datetime.strptime(event_time_str, "%H:%M").time()
-        event_date = datetime.combine(date, event_time)
+        eventTime = datetime.strptime(eventTimeStr, "%H:%M").time()
+        eventDate = datetime.combine(date, eventTime)
 
-        new_event = Event(event_date=event_date, description=event_description)
+        newEvent = Event(event_date=eventDate, description=eventDescription)
 
-        qdate = QDate(new_event.event_date.year, new_event.event_date.month, new_event.event_date.day)
+        qdate = QDate(
+            newEvent.event_date.year,
+            newEvent.event_date.month,
+            newEvent.event_date.day,
+        )
         self.calendar.setDateTextFormat(qdate, self.fmt)
 
-        self.session.add(new_event)
+        self.session.add(newEvent)
         self.session.commit()
-        
+
         self.showDateInfo()
         self.highlightFirstItem()
         self.toggleAddEditDeleteButtons()
 
     def delNote(self):
         # delete the currently selected item
-        row = self.note_group.currentRow()
-        item = self.note_group.item(row)
+        row = self.noteGroup.currentRow()
+        item = self.noteGroup.item(row)
 
         reply = QMessageBox.question(
             self, " ", "Remove", QMessageBox.Yes | QMessageBox.No
@@ -195,55 +207,58 @@ class Calendar(QWidget):
 
         if reply != QMessageBox.Yes:
             return
-        
-        event = self.session.query(Event).filter(Event.id == item.data(Qt.UserRole)).first()
+
+        event = Event.eventById(self.session, item.data(Qt.UserRole))
         self.session.delete(event)
         self.session.commit()
 
-        self.note_group.takeItem(row)
-        if self.note_group.count() == 0:
+        self.noteGroup.takeItem(row)
+        if self.noteGroup.count() == 0:
             self.calendar.setDateTextFormat(
-                QDate(event.event_date.year, event.event_date.month, event.event_date.day), 
-                self.delfmt
+                QDate(
+                    event.event_date.year, event.event_date.month, event.event_date.day
+                ),
+                self.delFmt,
             )
 
         self.showDateInfo()
         self.highlightFirstItem()
-            
 
     def editNote(self):
         # update current note
-        item = self.note_group.currentItem()
-        event = self.session.query(Event).filter(Event.id == item.data(Qt.UserRole)).first()
-        
-        edit_event_dialog = TimeInputDialog(event)
+        item = self.noteGroup.currentItem()
+        event = Event.eventById(self.session, item.data(Qt.UserRole))
 
-        if edit_event_dialog.exec_() != QDialog.Accepted:
+        editEventDialog = TimeInputDialog(event)
+
+        if editEventDialog.exec_() != QDialog.Accepted:
             return
-        
-        event_time_str = edit_event_dialog.get_time()
-        event_description = edit_event_dialog.get_text()
 
-        event_time = datetime.strptime(event_time_str, "%H:%M").time()
-        event.event_date = datetime.combine(event.event_date.date(), event_time)
-        event.description = event_description
-        
+        eventTimeStr = editEventDialog.getTime()
+        eventDescription = editEventDialog.getText()
+
+        eventTime = datetime.strptime(eventTimeStr, "%H:%M").time()
+        event.event_date = datetime.combine(event.event_date.date(), eventTime)
+        event.description = eventDescription
+
         self.session.commit()
         item.setText(str(event))
 
     def labelDate(self):
         # label to show the long name form of the selected date
         # format US style like "Thursday, February 20, 2020"
-        selected_date = self.calendar.selectedDate()
-        weekday = QDate.longDayName(selected_date.dayOfWeek())
-        month = QDate.longMonthName(selected_date.month())
-        
-        self.label.setText(f"{weekday}, {month} {selected_date.day()}, {selected_date.year()}")
+        selectedDate = self.calendar.selectedDate()
+        weekday = QDate.longDayName(selectedDate.dayOfWeek())
+        month = QDate.longMonthName(selectedDate.month())
+
+        self.label.setText(
+            f"{weekday}, {month} {selectedDate.day()}, {selectedDate.year()}"
+        )
 
     def highlightFirstItem(self):
         # highlight the first item immediately after switching selection
-        if self.note_group.count() > 0:
-            self.note_group.setCurrentRow(0)
+        if self.noteGroup.count() > 0:
+            self.noteGroup.setCurrentRow(0)
 
     def showTime(self):
         # keep the current time updated
@@ -257,11 +272,18 @@ class Calendar(QWidget):
         e.accept()
 
 
+def open_db_session():
+    engine = create_engine("sqlite:///events.db")
+    Event.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyleSheet(STYLESHEET)
     screen = app.primaryScreen()
     size = screen.size()
-    window = Calendar(size.width(), size.height())
+    window = Calendar(size.width(), size.height(), open_db_session())
     window.show()
     sys.exit(app.exec_())

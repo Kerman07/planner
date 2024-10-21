@@ -1,11 +1,25 @@
 # Planner app with calendar
-* made with PyQt5
-* saves and loads data from JSON file
-* automatically deletes entries from past days
-* visually shows which dates have events planned 
-* the LCD clock is constantly updated
 
-# Sample screens
+- built with PyQt5
+- stores and retrieves data from an SQLite database
+- visually shows which dates have events planned
+- the LCD clock is constantly updated
+
+## How to Run the App
+
+- Create a virtual environment:
+  - `python -m venv venv`
+- Activate the virtual environment:
+  - `source venv/bin/activate`
+- Install the dependencies from requirements.txt:
+  - `pip install -r requirements.txt`
+- Run the application:
+  - `python planner.py`
+
+## Sample Screens
+
 ![IMAGE](icons/sample.png)
+
 #
+
 ![IMAGE](icons/sample_add.png)

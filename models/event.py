@@ -4,8 +4,9 @@ from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
 
+
 class Event(Base):
-    __tablename__ = 'events'
+    __tablename__ = "events"
 
     id = Column(Integer, primary_key=True)
     event_date = Column(DateTime, nullable=False)
@@ -16,20 +17,27 @@ class Event(Base):
 
     @classmethod
     def eventsFromMidnight(cls, session):
-        today_midnight = datetime.combine(datetime.today(), time.min)
+        todayMidnight = datetime.combine(datetime.today(), time.min)
 
-        return session.query(cls)\
-                      .filter(cls.event_date >= today_midnight)\
-                      .order_by(cls.event_date)\
-                      .all()
+        return (
+            session.query(cls)
+            .filter(cls.event_date >= todayMidnight)
+            .order_by(cls.event_date)
+            .all()
+        )
 
     @classmethod
     def eventsOnDate(cls, session, specific_date):
-        start_of_day = specific_date.replace(hour=0, minute=0, second=0)
-        end_of_day = start_of_day + timedelta(days=1)
+        startOfDay = specific_date.replace(hour=0, minute=0, second=0)
+        endOfDay = startOfDay + timedelta(days=1)
 
-        return session.query(cls)\
-                      .filter(cls.event_date >= start_of_day, cls.event_date < end_of_day)\
-                      .order_by(cls.event_date)\
-                      .all()
+        return (
+            session.query(cls)
+            .filter(cls.event_date >= startOfDay, cls.event_date < endOfDay)
+            .order_by(cls.event_date)
+            .all()
+        )
 
+    @classmethod
+    def eventById(cls, session, id):
+        return session.query(cls).filter(cls.id == id).first()
