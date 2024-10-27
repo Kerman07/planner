@@ -2,18 +2,9 @@ import sys
 from datetime import datetime
 from os import path
 
-from PyQt5 import QtGui
-from PyQt5.QtCore import (
-    QDate,
-    QTime,
-    QTimer,
-    Qt,
-)
-from PyQt5.QtGui import (
-    QColor,
-    QPixmap,
-    QTextCharFormat,
-)
+from PyQt5.QtCore import QDate, QTime, QTimer, Qt
+from PyQt5.QtGui import QColor, QFont, QIcon, QPixmap, QTextCharFormat
+
 from PyQt5.QtWidgets import (
     QApplication,
     QCalendarWidget,
@@ -46,7 +37,7 @@ class Calendar(QWidget):
         self.iconFolder = path.join(folder, "icons")
 
         self.setWindowTitle("Planner")
-        self.setWindowIcon(QtGui.QIcon(path.join(self.iconFolder, "window.png")))
+        self.setWindowIcon(QIcon(path.join(self.iconFolder, "window.png")))
 
         self.setGeometry(width // 4, height // 4, width // 2, height // 2)
         self.initUI()
@@ -100,7 +91,7 @@ class Calendar(QWidget):
         todayButton = QPushButton("Today")
         todayButton.clicked.connect(self.selectToday)
         self.label = QLabel()
-        labelFont = QtGui.QFont("Arial", 16)
+        labelFont = QFont("Arial", 16)
         self.label.setFont(labelFont)
         self.labelDate()
         self.showDateInfo()
